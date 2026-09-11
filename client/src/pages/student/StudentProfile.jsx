@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   User,
   Mail,
@@ -14,6 +15,10 @@ import {
   CheckCircle2,
   FileText,
   Upload,
+  ExternalLink,
+  Trash2,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -26,6 +31,9 @@ import { CircularProgress, ProgressBar } from '../../components/common/Progress'
 export const StudentProfile = () => {
   const { user, updateProfile } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+  const [uploadingResume, setUploadingResume] = useState(false);
 
   const [formData, setFormData] = useState({
     name: user?.name || '',
@@ -43,6 +51,116 @@ export const StudentProfile = () => {
   );
   const [newSkill, setNewSkill] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const handleResumeUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File exceeds 5MB limit. Please upload a smaller PDF or document.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // Validate extension / MIME
+    const validExtensions = ['.pdf', '.doc', '.docx'];
+    const hasValidExt = validExtensions.some((ext) => file.name.toLowerCase().endsWith(ext));
+    if (!hasValidExt && file.type !== 'application/pdf') {
+      toast.error('Please upload a PDF or DOC/DOCX file.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setUploadingResume(true);
+    const reader = new FileReader();
+
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result;
+        const formattedSize =
+          file.size > 1024 * 1024
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.round(file.size / 1024)} KB`;
+
+        const res = await updateProfile({
+          resumeUrl: base64Data,
+          resumeName: file.name,
+          resumeSize: formattedSize,
+          resumeUpdatedAt: new Date().toISOString(),
+        });
+
+        if (res?.success) {
+          toast.success('Resume uploaded and saved to your profile!');
+        }
+      } catch (err) {
+        toast.error(err.message || 'Failed to upload resume');
+      } finally {
+        setUploadingResume(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+
+    reader.onerror = () => {
+      toast.error('Failed to read resume file from disk.');
+      setUploadingResume(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleDeleteResume = async () => {
+    if (!window.confirm('Are you sure you want to remove your uploaded resume?')) return;
+    setUploadingResume(true);
+    try {
+      const res = await updateProfile({
+        resumeUrl: '',
+        resumeName: '',
+        resumeSize: '',
+        resumeUpdatedAt: null,
+      });
+      if (res?.success) {
+        toast.info('Resume removed from profile.');
+      }
+    } catch (err) {
+      toast.error('Could not remove resume');
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
+  const handleViewResume = () => {
+    if (!user?.resumeUrl) {
+      toast.warning('No resume file uploaded yet.');
+      return;
+    }
+
+    try {
+      if (user.resumeUrl.startsWith('data:')) {
+        const parts = user.resumeUrl.split(';base64,');
+        const contentType = parts[0].split(':')[1] || 'application/pdf';
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+        for (let i = 0; i < rawLength; ++i) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+        const blob = new Blob([uInt8Array], { type: contentType });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank');
+      } else {
+        window.open(user.resumeUrl, '_blank');
+      }
+    } catch (e) {
+      const link = document.createElement('a');
+      link.href = user.resumeUrl;
+      link.download = user.resumeName || 'Resume.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   const handleAddSkill = (e) => {
     e?.preventDefault();
@@ -133,29 +251,119 @@ export const StudentProfile = () => {
 
           {/* Resume Card */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex items-center justify-between">
               <CardTitle>Placement Resume</CardTitle>
-              <Badge variant="info" size="sm">PDF</Badge>
+              {user?.resumeUrl ? (
+                <Badge variant="success" size="sm" dot>Uploaded</Badge>
+              ) : (
+                <Badge variant="neutral" size="sm">No File</Badge>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800">
-                <FileText className="w-8 h-8 text-rose-400 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-white truncate">
-                    {user?.name ? `${user.name.replace(/\s+/g, '_')}_Resume.pdf` : 'Resume_2026.pdf'}
-                  </p>
-                  <p className="text-[10px] text-slate-400">Updated 4 days ago • 184 KB</p>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".pdf,.doc,.docx"
+                onChange={handleResumeUpload}
+                className="hidden"
+              />
+
+              {user?.resumeUrl ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800">
+                    <FileText className="w-8 h-8 text-rose-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white truncate" title={user.resumeName || 'Uploaded Resume'}>
+                        {user.resumeName || `${user?.name?.replace(/\s+/g, '_') || 'Student'}_Resume.pdf`}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {user.resumeUpdatedAt
+                          ? `Updated ${new Date(user.resumeUpdatedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`
+                          : 'Active verified copy'}{' '}
+                        • {user.resumeSize || 'PDF Document'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleViewResume}
+                      leftIcon={<ExternalLink className="w-3.5 h-3.5" />}
+                    >
+                      View / Preview
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      isLoading={uploadingResume}
+                      onClick={() => fileInputRef.current?.click()}
+                      leftIcon={<Upload className="w-3.5 h-3.5" />}
+                    >
+                      Replace File
+                    </Button>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-xs"
+                    disabled={uploadingResume}
+                    onClick={handleDeleteResume}
+                    leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                  >
+                    Remove Uploaded Resume
+                  </Button>
                 </div>
+              ) : (
+                <div className="space-y-3">
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/50 bg-slate-900/50 hover:bg-slate-900 cursor-pointer transition-all group text-center"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform mb-2">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">
+                      Click to upload your resume
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Supports PDF, DOC, DOCX (Max 5MB)
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    className="w-full"
+                    isLoading={uploadingResume}
+                    leftIcon={<Upload className="w-4 h-4" />}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Select Resume File
+                  </Button>
+                </div>
+              )}
+
+              {/* Resume Builder Link */}
+              <div className="pt-2 border-t border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => navigate('/student/resume/builder')}
+                  className="w-full flex items-center justify-between text-left p-2.5 rounded-xl bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 hover:text-indigo-200 transition-colors group text-xs cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="font-semibold">Need an ATS-compliant resume?</span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </button>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full"
-                leftIcon={<Upload className="w-4 h-4" />}
-                onClick={() => toast.info('File upload storage integration configured for Phase 4.')}
-              >
-                Upload New Version
-              </Button>
             </CardContent>
           </Card>
         </div>

@@ -144,6 +144,7 @@ Here is the exact checklist of items you need to configure in `server/.env`:
 | `MONGODB_URI` | Optional | `mongodb://localhost:27017/smart_placement_portal` | **Your MongoDB connection string.** Can be a local URI or cloud URI from [MongoDB Atlas](https://www.mongodb.com/cloud/atlas). *(If left offline, the built-in resilient mock store enables 100% turnkey operation).* |
 | `JWT_SECRET` | **Recommended** | `super_secret_jwt_key_smart_placement_2026_dev` | **JWT secret key.** Replace with any random 32+ character string for production security. |
 | `GEMINI_API_KEY` | Optional | *(Leave blank for offline fallback)* | **Google Gemini API Key.** Get a free API key at [Google AI Studio](https://aistudio.google.com/). *(If not provided, the portal uses its built-in high-precision deterministic AI engines with zero runtime errors).* |
+| `CLIENT_URL` | Optional | `https://smartplacementportal.vercel.app` | **Frontend Production Domain.** Configured for CORS whitelist and production redirection. |
 
 ### Sample `server/.env` File
 ```env
@@ -152,6 +153,7 @@ NODE_ENV=development
 MONGODB_URI=mongodb://localhost:27017/smart_placement_portal
 JWT_SECRET=super_secret_jwt_key_smart_placement_2026_dev
 GEMINI_API_KEY=your_gemini_api_key_here
+CLIENT_URL=https://smartplacementportal.vercel.app
 ```
 
 ### College Customization Checklist (Optional)

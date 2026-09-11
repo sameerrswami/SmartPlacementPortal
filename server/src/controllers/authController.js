@@ -60,6 +60,10 @@ const registerUser = async (req, res) => {
       github: '',
       linkedin: '',
       avatar: '',
+      resumeUrl: '',
+      resumeName: '',
+      resumeSize: '',
+      resumeUpdatedAt: null,
       createdAt: new Date().toISOString(),
     };
 
@@ -162,7 +166,22 @@ const getMe = async (req, res) => {
 // @access  Private
 const updateProfile = async (req, res) => {
   const { isMockStoreActive } = getStoreStatus();
-  const fields = ['name', 'phone', 'department', 'cgpa', 'graduationYear', 'skills', 'bio', 'github', 'linkedin', 'avatar'];
+  const fields = [
+    'name',
+    'phone',
+    'department',
+    'cgpa',
+    'graduationYear',
+    'skills',
+    'bio',
+    'github',
+    'linkedin',
+    'avatar',
+    'resumeUrl',
+    'resumeName',
+    'resumeSize',
+    'resumeUpdatedAt',
+  ];
 
   if (isMockStoreActive) {
     const user = mockUsers.find((u) => u._id === req.user._id);
@@ -182,6 +201,7 @@ const updateProfile = async (req, res) => {
     if (user.skills && user.skills.length >= 4) score += 15;
     if (user.github && user.github.length > 5) score += 10;
     if (user.linkedin && user.linkedin.length > 5) score += 10;
+    if (user.resumeUrl && user.resumeUrl.length > 20) score += 10;
     user.readinessScore = Math.min(100, score);
 
     return res.json({
@@ -209,6 +229,7 @@ const updateProfile = async (req, res) => {
   if (user.skills && user.skills.length >= 4) score += 15;
   if (user.github && user.github.length > 5) score += 10;
   if (user.linkedin && user.linkedin.length > 5) score += 10;
+  if (user.resumeUrl && user.resumeUrl.length > 20) score += 10;
   user.readinessScore = Math.min(100, score);
 
   const updatedUser = await user.save();

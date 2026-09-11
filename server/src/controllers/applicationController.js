@@ -97,7 +97,7 @@ const applyJob = async (req, res) => {
         studentId: student._id,
         status: 'Applied',
         appliedAt: new Date().toISOString(),
-        resumeUrl: student.resumeUrl || 'https://smartportal.edu/resumes/default.pdf',
+        resumeUrl: student.resumeUrl || 'https://smartplacementportal.vercel.app/resumes/default.pdf',
         timeline: [
           {
             stage: 'Applied',
@@ -164,6 +164,7 @@ const applyJob = async (req, res) => {
       job: jobId,
       student: student._id,
       status: 'Applied',
+      resumeUrl: student.resumeUrl || 'https://smartplacementportal.vercel.app/resumes/default.pdf',
       timeline: [
         {
           stage: 'Applied',

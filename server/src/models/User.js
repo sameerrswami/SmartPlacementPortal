@@ -87,6 +87,22 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    resumeUrl: {
+      type: String,
+      default: '',
+    },
+    resumeName: {
+      type: String,
+      default: '',
+    },
+    resumeSize: {
+      type: String,
+      default: '',
+    },
+    resumeUpdatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -14,6 +14,7 @@ import {
   Sparkles,
   ArrowRight,
   UserCheck,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -346,7 +347,20 @@ export const AdminApplications = () => {
               </div>
               <div>
                 <span className="text-slate-400 font-semibold block">Attached Resume</span>
-                <span className="text-slate-300 font-medium truncate block">Official Verified CV</span>
+                {selectedApp.resumeUrl || selectedApp.student?.resumeUrl ? (
+                  <a
+                    href={selectedApp.resumeUrl || selectedApp.student?.resumeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-400 hover:text-indigo-300 font-bold inline-flex items-center gap-1 hover:underline mt-0.5"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>View Submitted CV</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <span className="text-slate-300 font-medium truncate block">Official Verified CV</span>
+                )}
               </div>
             </div>
 
