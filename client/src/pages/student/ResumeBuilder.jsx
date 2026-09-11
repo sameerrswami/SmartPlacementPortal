@@ -29,6 +29,147 @@ import { Card, CardHeader, CardTitle, CardContent } from '../../components/commo
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 
+export const DEFAULT_SAMEER_RESUME = {
+  personal: {
+    fullName: 'Sameer Swami',
+    email: 'sameerrswami@gmail.com',
+    phone: '+91 7906163577',
+    location: 'Saharanpur, Uttar Pradesh',
+    linkedin: 'http://www.linkedin.com/in/sameerswami/',
+    github: 'https://github.com/sameerrswami',
+    portfolio: '',
+  },
+  skills: {
+    languages: ['C++', 'Python', 'C', 'JavaScript'],
+    tools: ['Git', 'GitHub', 'VS Code'],
+    databases: ['MongoDB', 'MySQL'],
+    frameworks: ['React.js', 'Node.js', 'Express.js', 'Tailwind CSS', 'Socket.IO'],
+    softSkills: ['Problem-Solving', 'Team Player', 'Adaptability', 'Quick Learner'],
+    coreCS: [],
+  },
+  experience: [
+    {
+      company: 'Safety Circle India Pvt Ltd',
+      role: 'Safety Training Intern',
+      duration: "Feb' 26- Mar'26",
+      location: '',
+      bullets: [
+        'Conducted safety awareness sessions across various organizations to promote workplace safety standards.',
+        'Strengthened public speaking and crowd management abilities while engaging diverse audiences.',
+        'Coordinated safety campaigns with teams, improving communication and execution efficiency.',
+      ],
+    },
+  ],
+  projects: [
+    {
+      title: 'NextGenEditor – AI Integrated Coding Arena',
+      repoUrl: 'GitHub',
+      liveUrl: 'Live',
+      duration: "Apr' 26",
+      techStack: ['React.js', 'Node.js', 'Express.js', 'MongoDB', 'Socket.IO', 'Tailwind CSS', 'JWT', 'AI APIs'],
+      bullets: [
+        'Engineered a scalable collaborative coding platform featuring multiplayer programming, AI-powered code analysis, coding challenges, and live leaderboards.',
+        'Integrated real-time synchronization using Socket.IO and secure JWT authentication to enable seamless multi-user coding sessions.',
+        'Designed a responsive MERN-stack architecture with competitive coding workflows to enhance engagement and coding performance.',
+        'Tech: React.js, Node.js, Express.js, MongoDB, Socket.IO, Tailwind CSS, JWT, AI APIs',
+      ],
+    },
+    {
+      title: 'Full-Stack-Real-Time Chat Application',
+      repoUrl: 'GitHub',
+      liveUrl: 'Live',
+      duration: "Mar' 26",
+      techStack: ['React', 'JavaScript', 'Node.js', 'Express.js', 'MongoDB Atlas', 'JWT', 'Web Sockets (Socket.io)'],
+      bullets: [
+        'Built a scalable full-stack real-time chat platform supporting secure user authentication, instant messaging, and dynamic conversation management for multiple users.',
+        'Designed WebSocket-based messaging using Socket.io to enable low-latency communication and synchronized message delivery across active user sessions.',
+        'Developed modular RESTful APIs with Node.js and Express.js for authentication, message routing, and request handling, establishing a scalable backend architecture for real-time chat operations.',
+        'Tech: React, JavaScript, Node.js, Express.js, MongoDB Atlas, JWT, Web Sockets (Socket.io)',
+      ],
+    },
+  ],
+  certifications: [
+    {
+      title: 'Software Engineer Intern Role',
+      issuer: 'HackerRank',
+      linkText: 'Link',
+      credentialUrl: '',
+      year: "Feb' 26",
+    },
+    {
+      title: 'Fundamentals of Machine Learning and Artificial Intelligence',
+      issuer: 'AWS',
+      linkText: 'Link',
+      credentialUrl: '',
+      year: "Dec' 25",
+    },
+    {
+      title: 'Software Testing',
+      issuer: 'NPTEL',
+      linkText: 'Link',
+      credentialUrl: '',
+      year: "Oct' 25",
+    },
+    {
+      title: 'Master Generative AI and Generative AI Tools',
+      issuer: 'Infosys SpringBoard',
+      linkText: 'Link',
+      credentialUrl: '',
+      year: "Aug' 25",
+    },
+  ],
+  achievements: [
+    {
+      title: 'Solved 600+ DSA problems on LeetCode.',
+      date: "Aug' 26",
+    },
+    {
+      title: 'Secured Elite Certification in “Software Testing” from NPTEL.',
+      date: "Oct' 25",
+    },
+    {
+      title: 'Earned Gold Badges in C++, Java, SQL, and Python on HackerRank for problem-solving.',
+      date: "Sept' 25",
+    },
+  ],
+  education: [
+    {
+      institution: 'Lovely Professional University',
+      degree: 'Bachelor of Technology',
+      branch: 'Computer Science and Engineering',
+      cgpa: '8.03',
+      location: 'Phagwara, Punjab',
+      startYear: "Aug' 23",
+      endYear: 'Present',
+    },
+    {
+      institution: 'Asha Modern International School',
+      degree: 'Intermediate',
+      branch: 'Percentage: 87.2',
+      cgpa: '87.2%',
+      location: 'Saharanpur, Uttar Pradesh',
+      startYear: "Mar' 22",
+      endYear: "May' 23",
+    },
+    {
+      institution: 'Asha Modern International School',
+      degree: 'Matriculation',
+      branch: 'Percentage: 90',
+      cgpa: '90%',
+      location: 'Saharanpur, Uttar Pradesh',
+      startYear: "Mar' 20",
+      endYear: "May' 21",
+    },
+  ],
+  positions: [],
+  codingProfiles: {
+    leetcode: 'https://leetcode.com/u/sameerswami',
+    codeforces: '',
+    gfg: '',
+    github: 'https://github.com/sameerrswami',
+  },
+};
+
 export const ResumeBuilder = () => {
   const { user } = useAuth();
   const toast = useToast();
@@ -47,10 +188,14 @@ export const ResumeBuilder = () => {
         setLoading(true);
         const res = await api.get('/resumes/my');
         if (res.success && res.resume) {
-          setResume(res.resume);
+          const hasData = res.resume.projects?.length > 0 || res.resume.skills?.languages?.length > 0;
+          setResume(hasData ? res.resume : { ...DEFAULT_SAMEER_RESUME, user: res.resume.user });
+        } else {
+          setResume({ ...DEFAULT_SAMEER_RESUME });
         }
       } catch (err) {
         toast.error(err.message || 'Failed to load resume');
+        setResume({ ...DEFAULT_SAMEER_RESUME });
       } finally {
         setLoading(false);
       }
@@ -58,6 +203,13 @@ export const ResumeBuilder = () => {
 
     fetchResume();
   }, []);
+
+  const handleResetToDefault = () => {
+    if (window.confirm('Reset resume to Sameer Swami default template? Any unsaved changes will be replaced.')) {
+      setResume({ ...DEFAULT_SAMEER_RESUME, user: resume?.user });
+      toast.success('Loaded Sameer Swami default placement template!');
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -239,6 +391,16 @@ export const ResumeBuilder = () => {
 
         <div className="flex items-center gap-2.5">
           <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleResetToDefault}
+            className="text-slate-300 hover:text-white border border-slate-700/60"
+            leftIcon={<RefreshCw className="w-3.5 h-3.5 text-indigo-400" />}
+          >
+            Load Template
+          </Button>
+
+          <Button
             variant="ai"
             size="sm"
             onClick={() => navigate('/student/resume/analyzer')}
@@ -276,12 +438,12 @@ export const ResumeBuilder = () => {
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
             {[
               { id: 'personal', label: 'Personal' },
-              { id: 'education', label: 'Education' },
               { id: 'skills', label: 'Skills' },
+              { id: 'experience', label: 'Internship' },
               { id: 'projects', label: 'Projects' },
-              { id: 'experience', label: 'Experience' },
+              { id: 'certifications', label: 'Certificates' },
               { id: 'achievements', label: 'Achievements' },
-              { id: 'certifications', label: 'Certs & Leads' },
+              { id: 'education', label: 'Education' },
             ].map((s) => (
               <button
                 key={s.id}
@@ -505,6 +667,22 @@ export const ResumeBuilder = () => {
                         }))
                       }
                       className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
+                      placeholder="Git, GitHub, VS Code"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1 font-semibold">Soft Skills (Comma separated)</label>
+                    <input
+                      type="text"
+                      value={(skills.softSkills || []).join(', ')}
+                      onChange={(e) =>
+                        setResume((prev) => ({
+                          ...prev,
+                          skills: { ...prev.skills, softSkills: e.target.value.split(',').map((s) => s.trim()) },
+                        }))
+                      }
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white"
+                      placeholder="Problem-Solving, Team Player, Adaptability, Quick Learner"
                     />
                   </div>
                 </div>
@@ -805,104 +983,140 @@ export const ResumeBuilder = () => {
           <div
             ref={resumePrintRef}
             id="college-resume-sheet"
-            className="w-full max-w-[650px] bg-white text-slate-900 p-8 sm:p-10 rounded-2xl shadow-2xl border border-slate-200 print:border-none print:shadow-none print:p-0 print:m-0 font-sans leading-relaxed text-[11.5px]"
-            style={{ minHeight: '842px' }}
+            className="w-full max-w-[650px] bg-white text-slate-900 p-8 sm:p-9 rounded-2xl shadow-2xl border border-slate-200 print:border-none print:shadow-none print:p-0 print:m-0 font-sans leading-normal text-[11px]"
+            style={{ minHeight: '842px', fontFamily: '"Calibri", "Segoe UI", Arial, sans-serif' }}
           >
-            {/* Header / Personal Details */}
-            <div className="text-center pb-3 border-b-2 border-slate-900">
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 uppercase font-display">
-                {personal.fullName || 'ALEX CHEN'}
+            {/* Header: Name and 2-Column Links/Contacts */}
+            <div className="pb-1">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                {personal.fullName || 'Sameer Swami'}
               </h1>
-              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 mt-1.5 text-[10.5px] font-medium text-slate-700">
-                <span>{personal.email}</span>
-                <span>•</span>
-                <span>{personal.phone}</span>
-                <span>•</span>
-                <span>{personal.location}</span>
-              </div>
-              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 mt-1 text-[10px] font-semibold text-indigo-900">
-                <a href={personal.linkedin} target="_blank" rel="noreferrer" className="hover:underline">
-                  LinkedIn
-                </a>
-                <span>•</span>
-                <a href={personal.github} target="_blank" rel="noreferrer" className="hover:underline">
-                  GitHub
-                </a>
-                <span>•</span>
-                <a href={codingProfiles?.leetcode} target="_blank" rel="noreferrer" className="hover:underline">
-                  LeetCode
-                </a>
-                <span>•</span>
-                <a href={codingProfiles?.codeforces} target="_blank" rel="noreferrer" className="hover:underline">
-                  Codeforces
-                </a>
+
+              <div className="mt-2 grid grid-cols-2 text-[10.5px] leading-snug">
+                {/* Left Column: LinkedIn & GitHub */}
+                <div className="space-y-0.5">
+                  <p>
+                    <span className="font-semibold text-slate-900">LinkedIn:</span>{' '}
+                    <a
+                      href={personal.linkedin || 'http://www.linkedin.com/in/sameerswami/'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-700 hover:underline"
+                    >
+                      {personal.linkedin || 'http://www.linkedin.com/in/sameerswami/'}
+                    </a>
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">GitHub:</span>{' '}
+                    <a
+                      href={personal.github || 'https://github.com/sameerrswami'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-700 hover:underline"
+                    >
+                      {personal.github || 'https://github.com/sameerrswami'}
+                    </a>
+                  </p>
+                </div>
+
+                {/* Right Column: Email & Mobile */}
+                <div className="space-y-0.5 text-right">
+                  <p>
+                    <span className="font-semibold text-slate-900">Email:</span>{' '}
+                    <a
+                      href={`mailto:${personal.email || 'sameerrswami@gmail.com'}`}
+                      className="text-slate-900 hover:underline"
+                    >
+                      {personal.email || 'sameerrswami@gmail.com'}
+                    </a>
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">Mobile:</span>{' '}
+                    <span className="text-slate-900">{personal.phone || '+91 7906163577'}</span>
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* 1. Education Section */}
-            <div className="mt-3.5 space-y-1.5">
-              <h2 className="text-[11px] font-black uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5">
-                Education
+            <hr className="border-t border-slate-900 my-2" />
+
+            {/* 1. SKILLS */}
+            <div className="mt-2">
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-900 pb-0.5 mb-1.5">
+                SKILLS
               </h2>
-              <div className="space-y-1.5">
-                {(education || []).map((edu, idx) => (
-                  <div key={idx} className="flex justify-between items-start text-[11px]">
+              <ul className="space-y-0.5 text-[10.5px] leading-snug pl-1">
+                {skills?.languages?.length > 0 && (
+                  <li className="flex items-start gap-1.5">
+                    <span className="font-bold text-slate-900">•</span>
                     <div>
-                      <span className="font-bold text-slate-900">{edu.institution}</span>
-                      <p className="text-[10.5px] text-slate-700">{edu.degree}</p>
+                      <span className="font-bold text-slate-900">Languages:</span>{' '}
+                      <span>{skills.languages.join(', ')}</span>
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="font-bold text-slate-900">{edu.cgpa}</span>
-                      <p className="text-[10px] text-slate-600">{edu.startYear} – {edu.endYear}</p>
+                  </li>
+                )}
+                {skills?.tools?.length > 0 && (
+                  <li className="flex items-start gap-1.5">
+                    <span className="font-bold text-slate-900">•</span>
+                    <div>
+                      <span className="font-bold text-slate-900">Tools/Platforms:</span>{' '}
+                      <span>{skills.tools.join(', ')}</span>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  </li>
+                )}
+                {skills?.databases?.length > 0 && (
+                  <li className="flex items-start gap-1.5">
+                    <span className="font-bold text-slate-900">•</span>
+                    <div>
+                      <span className="font-bold text-slate-900">Databases:</span>{' '}
+                      <span>{skills.databases.join(', ')}</span>
+                    </div>
+                  </li>
+                )}
+                {skills?.frameworks?.length > 0 && (
+                  <li className="flex items-start gap-1.5">
+                    <span className="font-bold text-slate-900">•</span>
+                    <div>
+                      <span className="font-bold text-slate-900">Frameworks/Libraries:</span>{' '}
+                      <span>{skills.frameworks.join(', ')}</span>
+                    </div>
+                  </li>
+                )}
+                {(skills?.softSkills?.length > 0 || skills?.coreCS?.length > 0) && (
+                  <li className="flex items-start gap-1.5">
+                    <span className="font-bold text-slate-900">•</span>
+                    <div>
+                      <span className="font-bold text-slate-900">Soft Skills:</span>{' '}
+                      <span>{(skills?.softSkills || skills?.coreCS || []).join(', ')}</span>
+                    </div>
+                  </li>
+                )}
+              </ul>
             </div>
 
-            {/* 2. Technical Skills */}
-            <div className="mt-3.5 space-y-1">
-              <h2 className="text-[11px] font-black uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5">
-                Technical Skills
-              </h2>
-              <div className="space-y-0.5 text-[10.5px] text-slate-800">
-                <p>
-                  <strong className="text-slate-950 font-bold">Languages:</strong> {(skills?.languages || []).join(', ')}
-                </p>
-                <p>
-                  <strong className="text-slate-950 font-bold">Frameworks & Web:</strong> {(skills?.frameworks || []).join(', ')}
-                </p>
-                <p>
-                  <strong className="text-slate-950 font-bold">Databases & Caching:</strong> {(skills?.databases || []).join(', ')}
-                </p>
-                <p>
-                  <strong className="text-slate-950 font-bold">Core CS:</strong> {(skills?.coreCS || []).join(', ')}
-                </p>
-                <p>
-                  <strong className="text-slate-950 font-bold">Cloud & Tools:</strong> {(skills?.tools || []).join(', ')}
-                </p>
-              </div>
-            </div>
-
-            {/* 3. Experience */}
+            {/* 2. INTERNSHIP */}
             {experience && experience.length > 0 && (
-              <div className="mt-3.5 space-y-1.5">
-                <h2 className="text-[11px] font-black uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5">
-                  Professional Experience
+              <div className="mt-2">
+                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-900 pb-0.5 mb-1.5">
+                  INTERNSHIP
                 </h2>
-                <div className="space-y-2">
+                <div className="space-y-2 text-[10.5px]">
                   {experience.map((exp, idx) => (
                     <div key={idx} className="space-y-0.5">
-                      <div className="flex justify-between items-baseline text-[11px]">
-                        <div>
-                          <span className="font-bold text-slate-950">{exp.role}</span>
-                          <span className="text-slate-700"> | {exp.company}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-600">{exp.duration}</span>
+                      <div className="flex justify-between items-baseline font-bold text-slate-950">
+                        <span>{exp.company}</span>
+                        <span className="font-normal text-slate-700">{exp.duration}</span>
                       </div>
-                      <ul className="list-disc list-outside pl-4 space-y-0.5 text-[10.5px] text-slate-800 leading-snug">
+                      <div className="flex items-start gap-1.5 font-medium text-slate-900">
+                        <span>•</span>
+                        <span>{exp.role}</span>
+                      </div>
+                      <ul className="pl-5 space-y-0.5 text-slate-800">
                         {(exp.bullets || []).map((bullet, bIdx) => (
-                          <li key={bIdx}>{bullet}</li>
+                          <li key={bIdx} className="flex items-start gap-2">
+                            <span className="text-[8px] mt-0.5">◦</span>
+                            <span>{bullet}</span>
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -911,63 +1125,155 @@ export const ResumeBuilder = () => {
               </div>
             )}
 
-            {/* 4. Projects */}
-            <div className="mt-3.5 space-y-1.5">
-              <h2 className="text-[11px] font-black uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5">
-                Academic & Technical Projects
-              </h2>
-              <div className="space-y-2">
-                {(projects || []).map((proj, idx) => (
-                  <div key={idx} className="space-y-0.5">
-                    <div className="flex justify-between items-baseline text-[11px]">
-                      <div>
-                        <span className="font-bold text-slate-950">{proj.title}</span>
-                        <span className="text-[10px] text-slate-600 font-medium">
-                          {' '}| {(proj.techStack || []).join(', ')}
+            {/* 3. PROJECTS */}
+            {projects && projects.length > 0 && (
+              <div className="mt-2">
+                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-900 pb-0.5 mb-1.5">
+                  PROJECTS
+                </h2>
+                <div className="space-y-2 text-[10.5px]">
+                  {projects.map((proj, idx) => (
+                    <div key={idx} className="space-y-0.5">
+                      <div className="flex justify-between items-baseline">
+                        <div className="font-bold text-slate-950 flex items-center gap-1.5">
+                          <span>•</span>
+                          <span>{proj.title}</span>
+                          {(proj.repoUrl || proj.liveUrl) && (
+                            <span className="font-normal text-blue-700">
+                              {proj.repoUrl && (
+                                <a
+                                  href={proj.repoUrl.startsWith('http') ? proj.repoUrl : 'https://github.com/sameerrswami'}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="hover:underline"
+                                >
+                                  {' '}| GitHub
+                                </a>
+                              )}
+                              {proj.liveUrl && (
+                                <a
+                                  href={proj.liveUrl.startsWith('http') ? proj.liveUrl : '#'}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="hover:underline"
+                                >
+                                  {' '}| Live
+                                </a>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-normal text-slate-700 shrink-0">{proj.duration}</span>
+                      </div>
+                      <ul className="pl-5 space-y-0.5 text-slate-800">
+                        {(proj.bullets || []).map((bullet, bIdx) => (
+                          <li key={bIdx} className="flex items-start gap-2">
+                            <span className="text-[8px] mt-0.5">◦</span>
+                            <span>{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 4. CERTIFICATES */}
+            {certifications && certifications.length > 0 && (
+              <div className="mt-2">
+                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-900 pb-0.5 mb-1.5">
+                  CERTIFICATES
+                </h2>
+                <ul className="space-y-0.5 text-[10.5px] leading-snug">
+                  {certifications.map((c, idx) => (
+                    <li key={idx} className="flex justify-between items-baseline">
+                      <div className="flex items-start gap-1.5 text-slate-900">
+                        <span className="font-bold">•</span>
+                        <span>
+                          <strong className="font-medium">{c.title}</strong> | {c.issuer}
+                          {c.credentialUrl ? (
+                            <a
+                              href={c.credentialUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-700 hover:underline ml-1"
+                            >
+                              | Link
+                            </a>
+                          ) : (
+                            <span className="text-blue-700 ml-1">| Link</span>
+                          )}
                         </span>
                       </div>
-                      <span className="text-[10px] text-slate-600">{proj.duration}</span>
+                      <span className="font-normal text-slate-700 shrink-0">{c.year}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* 5. ACHIEVEMENTS */}
+            {achievements && achievements.length > 0 && (
+              <div className="mt-2">
+                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-900 pb-0.5 mb-1.5">
+                  ACHIEVEMENTS
+                </h2>
+                <ul className="space-y-0.5 text-[10.5px] leading-snug">
+                  {achievements.map((ach, idx) => {
+                    const text = typeof ach === 'object' ? ach.title : ach;
+                    const date = typeof ach === 'object' ? ach.date : '';
+                    return (
+                      <li key={idx} className="flex justify-between items-baseline text-slate-900">
+                        <div className="flex items-start gap-1.5">
+                          <span className="font-bold">•</span>
+                          <span>{text}</span>
+                        </div>
+                        {date && <span className="font-normal text-slate-700 shrink-0 pl-2">{date}</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {/* 6. EDUCATION */}
+            {education && education.length > 0 && (
+              <div className="mt-2">
+                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-900 pb-0.5 mb-1.5">
+                  EDUCATION
+                </h2>
+                <div className="space-y-2 text-[10.5px] leading-snug">
+                  {education.map((edu, idx) => (
+                    <div key={idx} className="space-y-0.5">
+                      <div className="flex justify-between items-baseline">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-950">
+                          <span>•</span>
+                          <span>{edu.institution}</span>
+                        </div>
+                        <span className="text-slate-700 font-normal">{edu.location}</span>
+                      </div>
+                      <div className="flex justify-between items-baseline pl-3.5 text-slate-800">
+                        <span>{edu.degree}</span>
+                        <span className="text-slate-700 font-normal">
+                          {edu.startYear} {edu.endYear ? `– ${edu.endYear}` : ''}
+                        </span>
+                      </div>
+                      {edu.branch && (
+                        <div className="pl-3.5 text-slate-800">
+                          <span>{edu.branch}</span>
+                        </div>
+                      )}
+                      {edu.cgpa && (
+                        <div className="pl-3.5 font-bold text-slate-900">
+                          <span>{edu.cgpa.includes('Percentage') || edu.cgpa.includes('%') ? edu.cgpa : `CGPA: ${edu.cgpa}`}</span>
+                        </div>
+                      )}
                     </div>
-                    <ul className="list-disc list-outside pl-4 space-y-0.5 text-[10.5px] text-slate-800 leading-snug">
-                      {(proj.bullets || []).map((b, bIdx) => (
-                        <li key={bIdx}>{b}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-
-            {/* 5. Achievements */}
-            <div className="mt-3.5 space-y-1">
-              <h2 className="text-[11px] font-black uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5">
-                Key Achievements & Honors
-              </h2>
-              <ul className="list-disc list-outside pl-4 space-y-0.5 text-[10.5px] text-slate-800 leading-snug">
-                {(achievements || []).map((ach, idx) => (
-                  <li key={idx}>{ach}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* 6. Certifications & Leadership */}
-            <div className="mt-3.5 space-y-1">
-              <h2 className="text-[11px] font-black uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5">
-                Certifications & Positions of Responsibility
-              </h2>
-              <div className="space-y-0.5 text-[10.5px] text-slate-800">
-                {(certifications || []).map((c, idx) => (
-                  <p key={idx}>
-                    <strong className="text-slate-950 font-bold">{c.title}</strong> — {c.issuer} ({c.year || '2025'})
-                  </p>
-                ))}
-                {(positions || []).map((pos, idx) => (
-                  <p key={idx}>
-                    <strong className="text-slate-950 font-bold">{pos.role}</strong>, {pos.organization} ({pos.duration}): {pos.description}
-                  </p>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

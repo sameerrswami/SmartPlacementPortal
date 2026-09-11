@@ -23,6 +23,7 @@ const resumeSchema = new mongoose.Schema(
         degree: { type: String, default: '' },
         branch: { type: String, default: '' },
         cgpa: { type: String, default: '' },
+        location: { type: String, default: '' },
         startYear: { type: String, default: '' },
         endYear: { type: String, default: '' },
       },
@@ -45,6 +46,10 @@ const resumeSchema = new mongoose.Schema(
         default: [],
       },
       tools: {
+        type: [String],
+        default: [],
+      },
+      softSkills: {
         type: [String],
         default: [],
       },
@@ -75,7 +80,7 @@ const resumeSchema = new mongoose.Schema(
       },
     ],
     achievements: {
-      type: [String],
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
     certifications: [
@@ -83,6 +88,7 @@ const resumeSchema = new mongoose.Schema(
         title: { type: String, default: '' },
         issuer: { type: String, default: '' },
         year: { type: String, default: '' },
+        linkText: { type: String, default: 'Link' },
         credentialUrl: { type: String, default: '' },
       },
     ],
