@@ -4,6 +4,8 @@ const Application = require('../models/Application');
 const { getStoreStatus } = require('../config/db');
 const { addMockNotification } = require('./notificationController');
 const { analyzeJobDescription, generateDeterministicAnalysis } = require('../services/geminiService');
+const { cacheService } = require('../services/cache/cacheService');
+const { cacheKeys, TTL } = require('../services/cache/cacheKeys');
 
 // In-memory jobs store (clean state - no demo data)
 const mockJobs = [];
@@ -17,6 +19,22 @@ const getJobs = async (req, res) => {
   try {
     const { search, branch, minCgpa, status, minPackage } = req.query;
     const { isMockStoreActive } = getStoreStatus();
+
+    // Cache-Aside Check for read-heavy listing queries
+    const filterHash = cacheKeys.computeHash({
+      ...req.query,
+      role: req.user?.role,
+    });
+    const cacheKey = cacheKeys.jobsList(filterHash);
+
+    const cachedList = await cacheService.get(cacheKey);
+    if (cachedList) {
+      return res.json({
+        ...cachedList,
+        cached: true,
+        source: 'redis',
+      });
+    }
 
     if (isMockStoreActive) {
       let filtered = [...mockJobs];
@@ -52,10 +70,16 @@ const getJobs = async (req, res) => {
         filtered = filtered.filter((j) => j.packageLpa >= Number(minPackage));
       }
 
-      return res.json({
+      const mockResult = {
         success: true,
         count: filtered.length,
         jobs: filtered,
+      };
+      await cacheService.set(cacheKey, mockResult, TTL.JOB_LISTINGS);
+      return res.json({
+        ...mockResult,
+        cached: false,
+        source: 'mock-store',
       });
     }
 
@@ -89,10 +113,17 @@ const getJobs = async (req, res) => {
 
     const jobs = await Job.find(query).sort({ createdAt: -1 });
 
-    return res.json({
+    const result = {
       success: true,
       count: jobs.length,
       jobs,
+    };
+    await cacheService.set(cacheKey, result, TTL.JOB_LISTINGS);
+
+    return res.json({
+      ...result,
+      cached: false,
+      source: 'database',
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -107,12 +138,25 @@ const getJobById = async (req, res) => {
     const { id } = req.params;
     const { isMockStoreActive } = getStoreStatus();
 
+    // Cache-Aside Check for job details
+    const cacheKey = cacheKeys.jobDetail(id);
+    const cachedJob = await cacheService.get(cacheKey);
+    if (cachedJob) {
+      return res.json({
+        success: true,
+        job: cachedJob,
+        cached: true,
+        source: 'redis',
+      });
+    }
+
     if (isMockStoreActive) {
       const job = findMockJobById(id);
       if (!job) {
         return res.status(404).json({ message: 'Job not found' });
       }
-      return res.json({ success: true, job });
+      await cacheService.set(cacheKey, job, TTL.JOB_DETAILS);
+      return res.json({ success: true, job, cached: false, source: 'mock-store' });
     }
 
     let job = null;
@@ -125,7 +169,9 @@ const getJobById = async (req, res) => {
     if (!job) {
       return res.status(404).json({ message: 'Job not found' });
     }
-    return res.json({ success: true, job });
+
+    await cacheService.set(cacheKey, job, TTL.JOB_DETAILS);
+    return res.json({ success: true, job, cached: false, source: 'database' });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -198,6 +244,10 @@ const createJob = async (req, res) => {
         });
       }
 
+      // Invalidate job listings and admin analytics cache on creation
+      await cacheService.delPattern('jobs:list:*');
+      await cacheService.del(cacheKeys.adminIntelligence());
+
       return res.status(201).json({
         success: true,
         message: 'Job drive created successfully',
@@ -231,6 +281,10 @@ const createJob = async (req, res) => {
       postedBy: req.user._id,
     });
 
+    // Invalidate job listings and admin analytics cache on creation
+    await cacheService.delPattern('jobs:list:*');
+    await cacheService.del(cacheKeys.adminIntelligence());
+
     return res.status(201).json({
       success: true,
       message: 'Job drive created successfully',
@@ -257,7 +311,10 @@ const updateJob = async (req, res) => {
 
       if (req.body.company) Object.assign(job.company, req.body.company);
       if (req.body.title) job.title = req.body.title;
-      if (req.body.description) job.description = req.body.description;
+      if (req.body.description && req.body.description !== job.description) {
+        job.description = req.body.description;
+        job.aiAnalysis = null; // Invalidate cached AI analysis when JD changes
+      }
       if (req.body.package) {
         job.package = req.body.package;
         const numMatch = req.body.package.match(/\d+(\.\d+)?/);
@@ -268,6 +325,11 @@ const updateJob = async (req, res) => {
       if (req.body.status) job.status = req.body.status;
       if (req.body.openings !== undefined) job.openings = Number(req.body.openings);
       if (req.body.eligibility) Object.assign(job.eligibility, req.body.eligibility);
+
+      // Invalidate affected caches
+      await cacheService.del(cacheKeys.jobDetail(id));
+      await cacheService.delPattern('jobs:list:*');
+      await cacheService.del(cacheKeys.adminIntelligence());
 
       return res.json({
         success: true,
@@ -285,6 +347,11 @@ const updateJob = async (req, res) => {
       return res.status(404).json({ message: 'Job not found' });
     }
 
+    // Invalidate stored AI analysis if JD text is altered
+    if (req.body.description && req.body.description !== job.description) {
+      job.aiAnalysis = null;
+    }
+
     Object.assign(job, req.body);
     if (req.body.package) {
       const numMatch = req.body.package.match(/\d+(\.\d+)?/);
@@ -292,6 +359,12 @@ const updateJob = async (req, res) => {
     }
 
     await job.save();
+
+    // Invalidate affected caches
+    await cacheService.del(cacheKeys.jobDetail(id));
+    await cacheService.delPattern('jobs:list:*');
+    await cacheService.del(cacheKeys.adminIntelligence());
+
     return res.json({
       success: true,
       message: 'Job drive updated successfully',
@@ -316,6 +389,9 @@ const deleteJob = async (req, res) => {
         return res.status(404).json({ message: 'Job not found' });
       }
       mockJobs.splice(index, 1);
+      await cacheService.del(cacheKeys.jobDetail(id));
+      await cacheService.delPattern('jobs:list:*');
+      await cacheService.del(cacheKeys.adminIntelligence());
       return res.json({ success: true, message: 'Job drive deleted successfully' });
     }
 
@@ -330,6 +406,10 @@ const deleteJob = async (req, res) => {
 
     await Job.findByIdAndDelete(id);
     await Application.deleteMany({ job: id });
+
+    await cacheService.del(cacheKeys.jobDetail(id));
+    await cacheService.delPattern('jobs:list:*');
+    await cacheService.del(cacheKeys.adminIntelligence());
 
     return res.json({ success: true, message: 'Job drive deleted successfully' });
   } catch (error) {
@@ -364,6 +444,10 @@ const togglePublishJob = async (req, res) => {
         });
       }
 
+      await cacheService.del(cacheKeys.jobDetail(id));
+      await cacheService.delPattern('jobs:list:*');
+      await cacheService.del(cacheKeys.adminIntelligence());
+
       return res.json({
         success: true,
         message: `Job drive is now ${nextStatus}`,
@@ -383,6 +467,11 @@ const togglePublishJob = async (req, res) => {
     job.status = job.status === 'published' ? 'draft' : 'published';
     await job.save();
 
+    await cacheService.del(cacheKeys.jobDetail(id));
+    await cacheService.delPattern('jobs:list:*');
+    await cacheService.del(cacheKeys.adminIntelligence());
+
+
     return res.json({
       success: true,
       message: `Job drive is now ${job.status}`,
@@ -393,7 +482,7 @@ const togglePublishJob = async (req, res) => {
   }
 };
 
-// @desc    Get job preparation workspace & AI JD intelligence (with persistent caching)
+// @desc    Get job preparation workspace & AI JD intelligence (with 3-tier persistent caching & stampede protection)
 // @route   GET /api/jobs/:id/prepare
 // @access  Private
 const getJobPreparation = async (req, res) => {
@@ -401,64 +490,56 @@ const getJobPreparation = async (req, res) => {
     const { id } = req.params;
     const { isMockStoreActive } = getStoreStatus();
 
-    if (isMockStoreActive) {
-      const job = findMockJobById(id);
-      if (!job) {
-        return res.status(404).json({ message: 'Job drive not found' });
-      }
-
-      // CRITICAL CACHE CHECK: If already analyzed, return cached analysis immediately!
-      if (job.aiAnalysis) {
-        return res.json({
-          success: true,
-          cached: true,
-          job,
-          analysis: job.aiAnalysis,
-        });
-      }
-
-      // First time analysis: compute once and cache permanently on job record
-      const analysis = await analyzeJobDescription(job);
-      job.aiAnalysis = analysis;
-
-      return res.json({
-        success: true,
-        cached: false,
-        job,
-        analysis,
-      });
-    }
-
-    // MongoDB Flow
     let job = null;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      job = await Job.findById(id);
-    }
-    if (!job) {
+    if (isMockStoreActive) {
       job = findMockJobById(id);
+    } else {
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        job = await Job.findById(id);
+      }
+      if (!job) {
+        job = findMockJobById(id);
+      }
     }
+
     if (!job) {
       return res.status(404).json({ message: 'Job drive not found' });
     }
 
-    // CRITICAL CACHE CHECK
-    if (job.aiAnalysis) {
-      return res.json({
-        success: true,
-        cached: true,
-        job,
-        analysis: job.aiAnalysis,
-      });
-    }
+    // Compute deterministic JD hash
+    const jdHash = cacheKeys.computeHash(
+      `${job.description} ${job.title} ${job.company?.name || ''}`
+    );
+    const cacheKey = cacheKeys.jdAnalysis(jdHash);
 
-    // First time analysis
-    const analysis = await analyzeJobDescription(job);
-    job.aiAnalysis = analysis;
-    await job.save();
+    // 3-Tier Persistent Cache-Aside with Single-Flight Stampede Protection
+    // Tier 1: Redis -> Tier 2: MongoDB aiAnalysis -> Tier 3: AI Engine
+    let resolvedSource = 'redis';
+    const { data: analysis, cached } = await cacheService.remember(
+      cacheKey,
+      TTL.AI_JD_ANALYSIS,
+      async () => {
+        // TIER 2: Check MongoDB Stored AI Result (Source of Truth)
+        if (job.aiAnalysis) {
+          resolvedSource = 'mongodb';
+          return job.aiAnalysis;
+        }
+
+        // TIER 3: Compute fresh AI intelligence
+        resolvedSource = 'ai';
+        const computedAnalysis = await analyzeJobDescription(job);
+        job.aiAnalysis = computedAnalysis;
+        if (!isMockStoreActive && job.save) {
+          await job.save();
+        }
+        return computedAnalysis;
+      }
+    );
 
     return res.json({
       success: true,
-      cached: false,
+      cached,
+      source: cached ? 'redis' : resolvedSource,
       job,
       analysis,
     });

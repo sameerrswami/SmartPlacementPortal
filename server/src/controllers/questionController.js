@@ -4,6 +4,8 @@ const { getStoreStatus } = require('../config/db');
 const { seedQuestions } = require('../data/seedQuestions');
 const { findMockJobById } = require('./jobController');
 const Job = require('../models/Job');
+const { cacheService } = require('../services/cache/cacheService');
+const { cacheKeys, TTL } = require('../services/cache/cacheKeys');
 
 // In-Memory store for offline/turnkey resilience
 let mockQuestions = [...seedQuestions];
@@ -51,11 +53,18 @@ const getQuestions = async (req, res) => {
     if (isMockStoreActive) {
       list = [...mockQuestions];
     } else {
-      const count = await Question.countDocuments();
-      if (count === 0) {
-        await Question.insertMany(seedQuestions);
+      const rawCacheKey = cacheKeys.questionsRaw();
+      const cached = await cacheService.get(rawCacheKey);
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        list = cached;
+      } else {
+        const count = await Question.countDocuments();
+        if (count === 0) {
+          await Question.insertMany(seedQuestions);
+        }
+        list = await Question.find({}).lean();
+        await cacheService.set(rawCacheKey, list, TTL.QUESTIONS_LIST);
       }
-      list = await Question.find({}).lean();
     }
 
     // Apply filtering
@@ -428,6 +437,7 @@ const generateQuestions = async (req, res) => {
           savedQuestions.push(newQ);
         }
       }
+      await cacheService.del(cacheKeys.questionsRaw());
     }
 
     return res.status(201).json({

@@ -5,6 +5,8 @@ const Interview = require('../models/Interview');
 const Resume = require('../models/Resume');
 const { getStoreStatus } = require('../config/db');
 const { getDefaultResumeData } = require('./resumeController');
+const { cacheService } = require('../services/cache/cacheService');
+const { cacheKeys, TTL } = require('../services/cache/cacheKeys');
 
 /**
  * Mock data for resilient store fallback
@@ -18,6 +20,16 @@ const MOCK_STUDENTS = [];
  */
 const getAdminIntelligence = async (req, res) => {
   try {
+    const cacheKey = cacheKeys.adminIntelligence();
+    const cachedIntelligence = await cacheService.get(cacheKey);
+    if (cachedIntelligence) {
+      return res.json({
+        ...cachedIntelligence,
+        cached: true,
+        source: 'redis',
+      });
+    }
+
     const { isMockStoreActive } = getStoreStatus();
 
     // 1. Core KPIs
@@ -71,7 +83,7 @@ const getAdminIntelligence = async (req, res) => {
     // 6. Weakness Analytics
     const collegeWeaknesses = [];
 
-    return res.json({
+    const responseData = {
       success: true,
       kpis: {
         totalStudents,
@@ -89,7 +101,11 @@ const getAdminIntelligence = async (req, res) => {
       applicationsTimeline,
       readinessDistribution,
       collegeWeaknesses,
-    });
+    };
+
+    await cacheService.set(cacheKey, responseData, TTL.ADMIN_INTELLIGENCE);
+
+    return res.json(responseData);
   } catch (error) {
     console.error('Error fetching admin intelligence:', error);
     return res.status(500).json({ message: error.message });

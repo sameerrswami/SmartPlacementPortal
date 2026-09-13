@@ -2,7 +2,12 @@
   "name": "smart-placement-portal",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix client\" \"npm run dev --prefix server\""
+    "dev": "concurrently \"npm run dev --prefix client\" \"npm run dev --prefix server\"",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "test:cache": "npm run test:cache --prefix server",
+    "test:failures": "npm run test:failures --prefix server",
+    "benchmark:cache": "npm run benchmark:cache --prefix server"
   },
   "devDependencies": {
     "concurrently": "9.2.1"

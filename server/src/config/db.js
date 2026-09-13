@@ -23,9 +23,12 @@ const connectDB = async () => {
   }
 };
 
-const getStoreStatus = () => ({
-  isConnected,
-  isMockStoreActive,
-});
+const getStoreStatus = () => {
+  const isMongooseConnected = mongoose.connection.readyState === 1;
+  return {
+    isConnected: isMongooseConnected,
+    isMockStoreActive: !isMongooseConnected || isMockStoreActive,
+  };
+};
 
 module.exports = { connectDB, getStoreStatus };

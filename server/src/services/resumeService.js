@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const { GoogleGenAI } = require('@google/genai');
 const ResumeAnalysis = require('../models/ResumeAnalysis');
 const { getStoreStatus } = require('../config/db');
+const { cacheService } = require('./cache/cacheService');
+const { cacheKeys, TTL } = require('./cache/cacheKeys');
 
 // In-Memory cache for turnkey/offline operation
 const mockAnalysisCache = {};
@@ -186,38 +188,42 @@ const analyzeResumeAgainstJD = async (resumeInput, jdInput, job = {}) => {
   // 1. Calculate Hashes
   const resumeHash = computeHash(resumeText);
   const jdHash = computeHash(jdText);
-  const cacheKey = `${resumeHash}_${jdHash}`;
+  const legacyCacheKey = `${resumeHash}_${jdHash}`;
+  const redisCacheKey = cacheKeys.resumeAnalysis(resumeHash, jdHash);
 
   const { isMockStoreActive } = getStoreStatus();
 
-  // 2. CRITICAL CACHE CHECK: Never analyze the same resume and JD twice!
-  if (isMockStoreActive) {
-    if (mockAnalysisCache[cacheKey]) {
-      return {
-        ...mockAnalysisCache[cacheKey],
-        cached: true,
-        latencyMs: Date.now() - startTime,
-      };
-    }
-  } else {
-    const cachedAnalysis = await ResumeAnalysis.findOne({ cacheKey }).lean();
-    if (cachedAnalysis) {
-      return {
-        ...cachedAnalysis,
-        cached: true,
-        latencyMs: Date.now() - startTime,
-      };
-    }
-  }
+  // 3-Tier Persistent Cache-Aside with Single-Flight Stampede Protection
+  // Tier 1: Redis -> Tier 2: MongoDB ResumeAnalysis -> Tier 3: AI Engine
+  let resolvedSource = 'redis';
+  const { data: analysisRecord, cached } = await cacheService.remember(
+    redisCacheKey,
+    TTL.AI_RESUME_ANALYSIS,
+    async () => {
+      // TIER 2: Check MongoDB Stored Analysis
+      let mongoRecord = null;
+      if (isMockStoreActive) {
+        mongoRecord = mockAnalysisCache[legacyCacheKey] || null;
+      } else {
+        mongoRecord = await ResumeAnalysis.findOne({
+          $or: [{ cacheKey: redisCacheKey }, { cacheKey: legacyCacheKey }, { resumeHash, jdHash }],
+        }).lean();
+      }
 
-  // 3. Perform Analysis (Gemini if key configured, otherwise deterministic ATS)
-  let result = null;
-  const apiKey = process.env.GEMINI_API_KEY;
+      if (mongoRecord) {
+        resolvedSource = 'mongodb';
+        return mongoRecord;
+      }
 
-  if (apiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `
+      // TIER 3: Call AI API with deterministic fallback
+      resolvedSource = 'ai';
+      let result = null;
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (apiKey) {
+        try {
+          const ai = new GoogleGenAI({ apiKey });
+          const prompt = `
 You are an expert technical recruiter and ATS auditor evaluating a student's resume against a job description.
 JOB TITLE: ${job.title || 'Software Engineer'}
 COMPANY: ${job.company?.name || 'Tech Company'}
@@ -248,45 +254,50 @@ Respond strictly in valid JSON matching this schema:
 }
 `;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
-        contents: prompt,
-        config: { responseMimeType: 'application/json' },
-      });
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.6-flash',
+            contents: prompt,
+            config: { responseMimeType: 'application/json' },
+          });
 
-      const parsed = JSON.parse(response.text);
-      result = {
-        ...parsed,
-        company: job.company?.name || 'Company',
-        jobTitle: job.title || 'Role',
-        engine: 'Gemini 3.6 Flash',
+          const parsed = JSON.parse(response.text);
+          result = {
+            ...parsed,
+            company: job.company?.name || 'Company',
+            jobTitle: job.title || 'Role',
+            engine: 'Gemini 3.6 Flash',
+          };
+        } catch (err) {
+          console.warn(`[ResumeService] Gemini call failed (${err.message}). Using deterministic ATS engine.`);
+          result = analyzeResumeDeterministically(resumeText, jdText, job);
+        }
+      } else {
+        result = analyzeResumeDeterministically(resumeText, jdText, job);
+      }
+
+      const record = {
+        cacheKey: redisCacheKey,
+        resumeHash,
+        jdHash,
+        jobId: job._id ? job._id.toString() : 'job-003',
+        ...result,
       };
-    } catch (err) {
-      console.warn(`[ResumeService] Gemini call failed (${err.message}). Using deterministic ATS engine.`);
-      result = analyzeResumeDeterministically(resumeText, jdText, job);
+
+      if (isMockStoreActive) {
+        mockAnalysisCache[legacyCacheKey] = record;
+        mockAnalysisCache[redisCacheKey] = record;
+      } else {
+        await ResumeAnalysis.create(record);
+      }
+
+      return record;
     }
-  } else {
-    result = analyzeResumeDeterministically(resumeText, jdText, job);
-  }
-
-  // 4. Save to Persistent Cache
-  const analysisRecord = {
-    cacheKey,
-    resumeHash,
-    jdHash,
-    jobId: job._id ? job._id.toString() : 'job-003',
-    ...result,
-  };
-
-  if (isMockStoreActive) {
-    mockAnalysisCache[cacheKey] = analysisRecord;
-  } else {
-    await ResumeAnalysis.create(analysisRecord);
-  }
+  );
 
   return {
     ...analysisRecord,
-    cached: false,
+    cached,
+    source: cached ? 'redis' : resolvedSource,
     latencyMs: Date.now() - startTime,
   };
 };

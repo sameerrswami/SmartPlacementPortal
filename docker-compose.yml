@@ -1,0 +1,107 @@
+services:
+  # =================================================================
+  # 1. FRONTEND SERVICE (React 19 + Vite + Tailwind CSS)
+  # =================================================================
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: spp-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_PROXY_TARGET=http://backend:5000
+      - PORT=5173
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - spp-network
+
+  # =================================================================
+  # 2. BACKEND API SERVICE (Node.js + Express + Gemini Live WS)
+  # =================================================================
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: spp-backend
+    ports:
+      - "${PORT:-5000}:5000"
+    environment:
+      - PORT=${PORT:-5000}
+      - NODE_ENV=${NODE_ENV:-development}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/smart_placement_portal}
+      - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_smart_placement_2026_dev}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_LIVE_MODEL=${GEMINI_LIVE_MODEL:-gemini-3.1-flash-live-preview}
+      - GEMINI_LIVE_VOICE=${GEMINI_LIVE_VOICE:-Kore}
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:5173}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_USERNAME=${REDIS_USERNAME:-}
+      - REDIS_TLS=${REDIS_TLS:-false}
+      - AI_CACHE_VERSION=${AI_CACHE_VERSION:-v1}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - spp-network
+
+  # =================================================================
+  # 3. DATABASE SERVICE (MongoDB 7.0)
+  # =================================================================
+  mongodb:
+    image: mongo:7.0
+    container_name: spp-mongodb
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - spp-network
+
+  # =================================================================
+  # 4. CACHE SERVICE (Redis 7 Alpine)
+  # =================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: spp-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - spp-network
+
+# ===================================================================
+# ISOLATED BRIDGE NETWORK
+# ===================================================================
+networks:
+  spp-network:
+    name: spp-network
+    driver: bridge
+
+

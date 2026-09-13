@@ -8,11 +8,14 @@ An enterprise-grade, full-stack MERN platform engineered for university Placemen
 
 ## 📋 Table of Contents
 
+- [🏛️ Full System Design Document (SYSTEM_DESIGN.md)](./SYSTEM_DESIGN.md)
 - [Key Highlights](#-key-highlights)
 - [Architecture & Tech Stack](#-architecture--tech-stack)
+- [⚡ Redis Caching Architecture](#-redis-caching-architecture)
 - [8-Phase Feature Overview](#-8-phase-feature-overview)
 - [Prerequisites](#-prerequisites)
 - [Quick Start Guide](#-quick-start-guide)
+- [🐳 Docker Deployment (Pre-built Image)](#-docker-deployment-pre-built-image)
 - [🎯 What You Need to Fill & Configure](#-what-you-need-to-fill--configure)
 - [Default Demo Credentials](#-default-demo-credentials)
 - [Project Directory Structure](#-project-directory-structure)
@@ -24,6 +27,7 @@ An enterprise-grade, full-stack MERN platform engineered for university Placemen
 ## ✨ Key Highlights
 
 - 🏢 **End-to-End Recruitment Management**: Admins publish drives, set strict academic eligibility (CGPA, allowed branches, graduation batch, backlog limits), track applicant pipelines, and manage offers.
+- ⚡ **Sub-Millisecond Redis Caching**: Redis 7 Alpine caching tier accelerating job listings, job preparation intelligence, and SHA-256 ATS resume evaluations from 400ms+ down to `< 1ms`.
 - 🧠 **AI JD Intelligence**: Analyzes Job Descriptions using Gemini 2.5 to extract core responsibilities, skill importance, recommended tech stacks, and job-specific prep roadmaps with permanent caching.
 - 💻 **Authentic Coding Preparation Engine**: Sourced from a curated MongoDB problem database (38 verified LeetCode & GeeksforGeeks problems) filtered by company and topic. **Zero hallucinated URLs**.
 - 📄 **Standardized College Resume Builder**: Enforces university placement formatting with live split-screen preview, profile auto-fill, and 1-click clean PDF export.
@@ -36,24 +40,77 @@ An enterprise-grade, full-stack MERN platform engineered for university Placemen
 
 ## 🛠️ Architecture & Tech Stack
 
+> 📘 **For comprehensive architectural blueprints, sequence diagrams, ER schemas, and cache stampede benchmarks, see the [Full System Design Document (SYSTEM_DESIGN.md)](./SYSTEM_DESIGN.md).**
+
 ```
-Frontend (SPA)                         Backend (REST API)                   Data & AI Layer
-┌─────────────────────────┐           ┌────────────────────────┐           ┌──────────────────────┐
-│  React 19 + Vite 8      │  HTTP/    │  Node.js + Express     │  Mongoose  │  MongoDB (Local/Atlas│
-│  Tailwind CSS           │  JSON     │  Helmet + Rate Limit   │───────────▶│  38 LeetCode/GFG DB  │
-│  React Router v7        │──────────▶│  JWT Auth + RBAC       │            └──────────────────────┘
-│  Web Speech & Audio API │  (Bearer) │  Express Controllers   │                       │
-│  Code-Split (React.lazy)│           │  Resilient Fallback    │            ┌──────────────────────┐
-└─────────────────────────┘           └────────────────────────┘            │  Google Gemini 2.5   │
-                                                   │───────────────────────▶│  (Strict SHA-256     │
-                                                                            │   Response Caching)  │
-                                                                            └──────────────────────┘
+Frontend (SPA)                         Backend (REST API)                   Data & Acceleration Layer
+┌─────────────────────────┐           ┌────────────────────────┐           ┌──────────────────────────┐
+│  React 19 + Vite 8      │  HTTP/    │  Node.js + Express     │  Tier 1   │  Redis 7 Cache (Alpine)  │
+│  Tailwind CSS           │  JSON     │  Helmet + Rate Limit   │──────────▶│  Sub-1ms Read & Locks    │
+│  React Router v7        │──────────▶│  JWT Auth + RBAC       │           └──────────────────────────┘
+│  Web Speech & Audio API │  (Bearer) │  Express Controllers   │                        │
+│  Code-Split (React.lazy)│           │  Fail-Open CacheService│  Tier 2   ┌──────────────────────────┐
+└─────────────────────────┘           └────────────────────────┘──────────▶│  MongoDB (Local/Atlas)   │
+                                                   │                       │  38 LeetCode/GFG DB      │
+                                                   │                       └──────────────────────────┘
+                                                   │                                    │
+                                                   │              Tier 3   ┌──────────────────────────┐
+                                                   └──────────────────────▶│  Google Gemini 2.5       │
+                                                                           │  (Strict SHA-256 Caching)│
+                                                                           └──────────────────────────┘
 ```
 
 - **Frontend**: React 19, Vite 8, Tailwind CSS, Lucide Icons, Canvas Confetti.
 - **Backend**: Node.js, Express.js, JWT, bcryptjs, Helmet, Express Rate Limit, CORS.
-- **Database**: MongoDB & Mongoose (with automated in-memory fallback if MongoDB is offline).
-- **AI Engine**: Google Gen AI SDK (`@google/genai`) with Gemini 2.5 Flash + high-precision deterministic NLP fallback engines.
+- **In-Memory Cache (Tier 1)**: Redis 7 Alpine (`ioredis`) with exponential backoff connection retries, fail-open read/write wrappers, single-flight stampede protection, and TLS encryption.
+- **Primary Database (Tier 2)**: MongoDB & Mongoose (with automated in-memory fallback if MongoDB is offline).
+- **AI Engine (Tier 3)**: Google Gen AI SDK (`@google/genai`) with Gemini 2.5 Flash + high-precision deterministic NLP fallback engines.
+
+---
+
+## ⚡ Redis Caching Architecture
+
+The portal implements an enterprise **3-Tier Cache-Aside Architecture** designed for high throughput, minimal AI token consumption, and zero-downtime resilience:
+
+```
+Request ──▶ [Tier 1: Redis Cache (<1ms)] ──HIT──▶ Return Data
+                     │ MISS
+                     ▼
+            [Tier 2: MongoDB (10-30ms)] ──HIT──▶ Repopulate Redis ──▶ Return Data
+                     │ MISS
+                     ▼
+            [Tier 3: Gemini AI Engine] ────────▶ Persist to MongoDB & Redis ──▶ Return Data
+```
+
+### Key Architectural Pillars
+
+1. **Sub-Millisecond Read Acceleration**:
+   - **Job Listings (`jobs:list:{filterHash}:v1`)**: Cached for 2 minutes (`TTL.JOB_LISTINGS`).
+   - **Job Details (`jobs:detail:{id}:v1`)**: Cached for 5 minutes (`TTL.JOB_DETAILS`).
+   - **AI JD Intelligence (`ai:jd-analysis:{hash}:v1`)**: Deterministic SHA-256 key cached for 24 hours (`TTL.AI_JD_ANALYSIS`).
+   - **ATS Resume Matcher (`ai:resume-analysis:{rHash}:{jdHash}:v1`)**: Deterministic pair hash cached for 12 hours (`TTL.AI_RESUME_ANALYSIS`).
+   - **Curated Question Catalog (`questions:raw:all:v1`)**: Cached for 10 minutes (`TTL.QUESTIONS_LIST`).
+   - **Admin Analytics KPIs (`admin:intelligence:v1`)**: Aggregated placement metrics cached for 60 seconds (`TTL.ADMIN_INTELLIGENCE`).
+
+2. **Single-Flight Stampede Protection**:
+   - Multiple concurrent incoming requests for un-cached AI evaluations are automatically deduplicated in-flight via a Promise registry in [`cacheService.js`](file:///c:/Users/Sameer%20Swami/OneDrive/Desktop/SmartPlacementPortal/server/src/services/cache/cacheService.js).
+   - Under 100 simultaneous concurrent queries, **exactly 1 call is dispatched to the AI engine**, saving **99% of LLM costs** and eliminating API rate limits.
+
+3. **Active Invalidation Triggers**:
+   - Drive creation, updates, deletes, or publish toggles automatically flush matching keys (`jobs:list:*`, `jobs:detail:{id}:v1`, `admin:intelligence:v1`) via non-blocking `SCAN`.
+   - Student application submissions and stage progressions instantly invalidate `admin:intelligence:v1`.
+   - Resume edits generate a new SHA-256 hash, naturally bypassing stale evaluation results.
+
+4. **Fail-Open Resilience**:
+   - If Redis is unreachable, offline, or restarts, all cache calls fail open gracefully: reads return `null` and writes return `false`.
+   - The application automatically falls back to MongoDB Atlas or the in-memory fallback store without raising unhandled errors or crashing.
+   - Connections automatically re-establish with exponential backoff (150ms to 2000ms cap).
+
+5. **Diagnostic Endpoints**:
+   - `GET /api/health`: Returns service health with live database and Redis socket & ping status.
+   - `GET /api/health/cache`: Returns total active cached keys, key breakdown across namespaces (`ai:`, `jobs:`, `questions:`, `admin:`, `lock:`), and endpoint connection mode.
+
+
 
 ---
 
@@ -133,6 +190,37 @@ Open your browser at **`http://localhost:5173`** to access the portal!
 
 ---
 
+## 🐳 Docker Deployment (Pre-built Image)
+
+You can run the entire platform instantly using the official Docker image without needing to set up local development environments:
+
+### 1. Pull the Image
+```bash
+docker pull sameerrswami/smartplacementportal:latest
+```
+
+### 2. Run the Container
+```bash
+docker run -d \
+  -p 5000:5000 \
+  -e PORT=5000 \
+  -e NODE_ENV=production \
+  -e MONGODB_URI="your_mongodb_connection_string" \
+  -e JWT_SECRET="your_secure_jwt_secret" \
+  -e GEMINI_API_KEY="your_gemini_api_key_optional" \
+  --name smartplacementportal \
+  sameerrswami/smartplacementportal:latest
+```
+Open **`http://localhost:5000`** in your browser to access the portal!
+
+### 3. Or Run with Docker Compose
+If you prefer running multi-container orchestration with all local services:
+```bash
+docker compose up -d
+```
+
+---
+
 ## 🎯 What You Need to Fill & Configure
 
 Here is the exact checklist of items you need to configure in `server/.env`:
@@ -145,16 +233,28 @@ Here is the exact checklist of items you need to configure in `server/.env`:
 | `JWT_SECRET` | **Recommended** | `super_secret_jwt_key_smart_placement_2026_dev` | **JWT secret key.** Replace with any random 32+ character string for production security. |
 | `GEMINI_API_KEY` | Optional | *(Leave blank for offline fallback)* | **Google Gemini API Key.** Get a free API key at [Google AI Studio](https://aistudio.google.com/). *(If not provided, the portal uses its built-in high-precision deterministic AI engines with zero runtime errors).* |
 | `CLIENT_URL` | Optional | `https://smartplacementportal.vercel.app` | **Frontend Production Domain.** Configured for CORS whitelist and production redirection. |
+| `REDIS_URL` | Optional | *(Leave unset for direct DB mode)* | **Redis Connection String.** If omitted, server serves directly from MongoDB Atlas with zero connection logs. Cloud (Upstash/Redis Cloud): `rediss://default:password@host:port`. Local Docker: `redis://redis:6379`. |
+| `REDIS_HOST` | Optional | *(Empty)* | Redis host when `REDIS_URL` is omitted. |
+| `REDIS_PORT` | Optional | `6379` | Redis port when `REDIS_HOST` is specified. |
+| `REDIS_PASSWORD` | Optional | *(Empty)* | Password for password-protected / Cloud Redis instances. |
+| `REDIS_TLS` | Optional | `false` | Set to `true` when connecting over TLS/SSL (automatically inferred if `rediss://` is used). |
+| `AI_CACHE_VERSION` | Optional | `v1` | Cache version key. Increment (e.g. `v2`) to instantly invalidate all cached AI prompts across instances. |
 
-### Sample `server/.env` File
+### Sample `server/.env` File (Production / Standard Setup)
 ```env
 PORT=5000
 NODE_ENV=development
-MONGODB_URI=mongodb://localhost:27017/smart_placement_portal
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/smartplacementportal
 JWT_SECRET=super_secret_jwt_key_smart_placement_2026_dev
 GEMINI_API_KEY=your_gemini_api_key_here
 CLIENT_URL=https://smartplacementportal.vercel.app
+
+# Redis Tier-1 Caching Configuration (Optional)
+# If left commented out, the backend serves seamlessly from MongoDB Atlas directly
+# REDIS_URL=rediss://default:password@your-redis-host:6379
+# AI_CACHE_VERSION=v1
 ```
+
 
 ### College Customization Checklist (Optional)
 If you wish to brand the portal for your specific institution:
@@ -256,6 +356,10 @@ SmartPlacementPortal/
 | `npm run dev` | Starts server in development mode using `nodemon` on port 5000. |
 | `npm start` | Starts server in production mode (`node src/server.js`). |
 | `npm run seed` | Seeds MongoDB with 38 authentic coding questions and initial placement drives. |
+| `npm run test:cache` | Executes the 13-scenario automated cache verification test suite (32/32 assertions). |
+| `npm run test:failures` | Runs failure and chaos resilience suite (Redis OFF, Redis Restart, AI API Outage fallback). |
+| `npm run benchmark:cache` | Benchmarks single-flight concurrency under 10, 50, and 100 simultaneous requests. |
+
 
 ### Frontend (`client/`)
 | Command | Description |

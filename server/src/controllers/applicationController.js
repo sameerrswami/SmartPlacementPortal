@@ -6,6 +6,8 @@ const { getStoreStatus } = require('../config/db');
 const { findMockJobById } = require('./jobController');
 const { findMockUserById } = require('./authController');
 const { addMockNotification } = require('./notificationController');
+const { cacheService } = require('../services/cache/cacheService');
+const { cacheKeys } = require('../services/cache/cacheKeys');
 
 // In-Memory store for evaluation
 const mockApplications = [];
@@ -120,6 +122,8 @@ const applyJob = async (req, res) => {
         link: '/student/applications',
       });
 
+      await cacheService.del(cacheKeys.adminIntelligence());
+
       return res.status(201).json({
         success: true,
         message: `Successfully applied to ${job.company.name}!`,
@@ -174,6 +178,8 @@ const applyJob = async (req, res) => {
         },
       ],
     });
+
+    await cacheService.del(cacheKeys.adminIntelligence());
 
     return res.status(201).json({
       success: true,
@@ -346,6 +352,8 @@ const updateApplicationStatus = async (req, res) => {
         link: '/student/applications',
       });
 
+      await cacheService.del(cacheKeys.adminIntelligence());
+
       return res.json({
         success: true,
         message: `Application advanced to stage: ${status}`,
@@ -372,6 +380,8 @@ const updateApplicationStatus = async (req, res) => {
     });
 
     await application.save();
+
+    await cacheService.del(cacheKeys.adminIntelligence());
 
     return res.json({
       success: true,

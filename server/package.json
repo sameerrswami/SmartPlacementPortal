@@ -7,7 +7,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "test:cache": "node scripts/testCache.js",
+    "test:failures": "node scripts/testFailures.js",
+    "benchmark:cache": "node scripts/benchmarkCache.js"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
@@ -17,6 +20,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
     "ws": "8.21.3"

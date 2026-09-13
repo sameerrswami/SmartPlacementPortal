@@ -3,6 +3,7 @@ const Job = require('../models/Job');
 const { getStoreStatus } = require('../config/db');
 const { findMockJobById } = require('./jobController');
 const { analyzeResumeAgainstJD, convertResumeToText } = require('../services/resumeService');
+const { cacheService } = require('../services/cache/cacheService');
 
 // In-Memory store for offline resilience
 const mockResumes = {};
@@ -215,6 +216,9 @@ const saveMyResume = async (req, res) => {
       Object.assign(resume, updatedData);
     }
     await resume.save();
+
+    // Invalidate any user-specific resume caches
+    await cacheService.delPattern(`user:${userId}:resume:*`);
 
     return res.json({
       success: true,
